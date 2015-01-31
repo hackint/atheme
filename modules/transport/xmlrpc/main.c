@@ -43,6 +43,7 @@ static int xmlrpcmethod_privset(void *conn, int parc, char *parv[]);
 static int xmlrpcmethod_ison(void *conn, int parc, char *parv[]);
 static int xmlrpcmethod_metadata(void *conn, int parc, char *parv[]);
 static int xmlrpcmethod_register(void *conn, int parc, char *parv[]);
+static int xmlrpcmethod_verify(void *conn, int parc, char *parv[]);
 
 /* Configuration */
 mowgli_list_t conf_xmlrpc_table;
@@ -122,6 +123,7 @@ void _modinit(module_t *m)
 	xmlrpc_register_method("atheme.ison", xmlrpcmethod_ison);
 	xmlrpc_register_method("atheme.metadata", xmlrpcmethod_metadata);
 	xmlrpc_register_method("atheme.register", xmlrpcmethod_register);
+	xmlrpc_register_method("atheme.verify", xmlrpcmethod_verify);
 }
 
 void _moddeinit(module_unload_intent_t intent)
@@ -135,6 +137,7 @@ void _moddeinit(module_unload_intent_t intent)
 	xmlrpc_unregister_method("atheme.ison");
 	xmlrpc_unregister_method("atheme.metadata");
 	xmlrpc_unregister_method("atheme.register");
+	xmlrpc_unregister_method("atheme.verify");
 
 	if ((n = mowgli_node_find(&handle_xmlrpc, httpd_path_handlers)) != NULL)
 	{
@@ -694,6 +697,63 @@ static int xmlrpcmethod_register(void *conn, int parc, char *parv[])
 	logcommand_external(nicksvs.me, "xmlrpc", conn, (parc >= 4) ? parv[3] : "127.0.0.1", mu, CMDLOG_REGISTER, "REGISTER");
 
 	xmlrpc_string(buf, "Registration successful");
+	xmlrpc_send(1, buf);
+	return 0;
+}
+
+/*
+ * atheme.verify
+ *
+ * XML Inputs:
+ *       account name, verification key, source ip (optional)
+ *
+ * XML Outputs:
+ *       fault 1 - account doesn't exist
+ *       fault 2 - invalid verification key
+ *       fault 3 - insufficient parameters
+ *       fault 4 - not awaiting verification
+ *       default - success message
+ *
+ * Side Effects:
+ *       A new NickServ/UserServ account is registered.
+ */
+static int xmlrpcmethod_verify(void *conn, int parc, char *parv[])
+{
+	myuser_t *mu;
+	metadata_t *md;
+	static char buf[XMLRPC_BUFSIZE];
+
+	*buf = '\0';
+	if (parc < 2)
+	{
+		xmlrpc_generic_error(3, "Insufficient parameters.");
+		return 0;
+	}
+	if (!(mu = myuser_find(parv[0])))
+	{
+		xmlrpc_generic_error(1, "The account is not registered.");
+		return 0;
+	}
+	/* (Do not check weather the user has logged in yet) */
+	if (!(mu->flags & MU_WAITAUTH) || !(md = metadata_find(mu, "private:verify:register:key")))
+	{
+		xmlrpc_generic_error(4, "Not awaiting verification");
+		return 0;
+	}
+	if (strcasecmp(parv[1], md->value))
+	{
+		xmlrpc_generic_error(2, "Invalid verification key");
+		return 0;
+	}
+
+	mu->flags &= ~MU_WAITAUTH;
+	
+	metadata_delete(mu, "private:verify:register:key");
+	metadata_delete(mu, "private:verify:register:timestamp");
+
+	logcommand_external(nicksvs.me, "xmlrpc", conn, (parc >= 3) ? parv[2] : "127.0.0.1", mu, LG_REGISTER, "VERIFY");
+
+	xmlrpc_string(buf, "Verification successful");
 	xmlrpc_send(1, buf);
 	return 0;
 }
