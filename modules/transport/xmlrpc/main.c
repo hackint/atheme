@@ -42,6 +42,7 @@ static int xmlrpcmethod_command(void *conn, int parc, char *parv[]);
 static int xmlrpcmethod_privset(void *conn, int parc, char *parv[]);
 static int xmlrpcmethod_ison(void *conn, int parc, char *parv[]);
 static int xmlrpcmethod_metadata(void *conn, int parc, char *parv[]);
+static int xmlrpcmethod_register(void *conn, int parc, char *parv[]);
 
 /* Configuration */
 mowgli_list_t conf_xmlrpc_table;
@@ -120,6 +121,7 @@ void _modinit(module_t *m)
 	xmlrpc_register_method("atheme.privset", xmlrpcmethod_privset);
 	xmlrpc_register_method("atheme.ison", xmlrpcmethod_ison);
 	xmlrpc_register_method("atheme.metadata", xmlrpcmethod_metadata);
+	xmlrpc_register_method("atheme.register", xmlrpcmethod_register);
 }
 
 void _moddeinit(module_unload_intent_t intent)
@@ -132,6 +134,7 @@ void _moddeinit(module_unload_intent_t intent)
 	xmlrpc_unregister_method("atheme.privset");
 	xmlrpc_unregister_method("atheme.ison");
 	xmlrpc_unregister_method("atheme.metadata");
+	xmlrpc_unregister_method("atheme.register");
 
 	if ((n = mowgli_node_find(&handle_xmlrpc, httpd_path_handlers)) != NULL)
 	{
@@ -612,6 +615,86 @@ static int xmlrpcmethod_metadata(void *conn, int parc, char *parv[])
 	xmlrpc_string(buf, md->value);
 	xmlrpc_send(1, buf);
 
+	return 0;
+}
+
+/* Done by looking at Jilles Tjoelker's http://www.stack.nl/~jilles/cgi-bin/hgwebdir.cgi/atheme/raw-file/7c7bf63c8a9e/modules/xmlrpc/account.c and adapting */
+/*
+ * atheme.register
+ *
+ * XML Inputs:
+ *       account name, password, e-mail, source ip (optional),
+ *       verification key (optional)
+ *
+ * XML Outputs:
+ *       fault 1 - account already exists, please try another name
+ *       fault 3 - invalid email address
+ *       fault 4 - not enough parameters
+ *       fault 5 - user is on IRC (would be unfair to claim ownership)
+ *       fault 6 - too many accounts associated with this email
+ *       default - success message
+ *
+ * Side Effects:
+ *       A new NickServ/UserServ account is registered.
+ */
+static int xmlrpcmethod_register(void *conn, int parc, char *parv[])
+{
+	myuser_t *mu;
+	mynick_t *mn = NULL;
+	static char buf[XMLRPC_BUFSIZE];
+
+	*buf = '\0';
+	if (parc < 3)
+	{
+		xmlrpc_generic_error(4, "Insufficient parameters.");
+		return 0;
+	}
+	if ((nicksvs.no_nick_ownership == FALSE) && (user_find(parv[0]) != NULL))
+	{
+		xmlrpc_generic_error(5, "A user matching this account is already on IRC.");
+		return 0;
+	}
+	if ((mu = myuser_find(parv[0])) != NULL)
+	{
+		xmlrpc_generic_error(1, "The account is already registered.");
+		return 0;
+	}
+	/* We explicitely do not check for a vaild e-mail-address or
+	 * weather the number of times the e-mail-address has been used is
+	 * exceeded. This is the responsibility of the caller, which may have
+	 * good reasons to break these limits, such as anonymous registration
+	 * via hashcash. */
+	mu = myuser_add(parv[0], auth_module_loaded ? "*" : parv[1], parv[2],
+			config_options.defuflags | MU_NOBURSTLOGIN |
+			(auth_module_loaded ? MU_CRYPTPASS : 0));
+	mu->registered = CURRTIME;
+	mu->lastlogin = CURRTIME;
+	if (!nicksvs.no_nick_ownership)
+	{
+		mn = mynick_add(mu, entity(mu)->name);
+		mn->registered = CURRTIME;
+		mn->lastseen = CURRTIME;
+	}
+	/* Do not check for rate limits */
+	/* Do not check the password strength */
+
+	/* A verification code is created upon the caller's request,
+	 * independent of weather e-mail verification is configured in
+	 * shalture.conf */
+	if (parc >= 5)
+	{
+		char *key = parv[4];
+		mu->flags |= MU_WAITAUTH;
+		metadata_add(mu, "private:verify:register:key", key);
+		metadata_add(mu, "private:verify:register:timestamp",
+				number_to_string(time(NULL)));
+	}
+
+	slog(LG_REGISTER, _("REGISTER via xmlrpc: \2%s\2 to \2%s\2"), parv[0], parv[2]);
+	logcommand_external(nicksvs.me, "xmlrpc", conn, (parc >= 4) ? parv[3] : "127.0.0.1", mu, CMDLOG_REGISTER, "REGISTER");
+
+	xmlrpc_string(buf, "Registration successful");
+	xmlrpc_send(1, buf);
 	return 0;
 }
 
