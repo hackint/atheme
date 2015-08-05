@@ -1974,7 +1974,9 @@ static int expire_myuser_cb(myentity_t *mt, void *unused)
 		return 0;
 
 	if ((nicksvs.expiry > 0 && mu->lastlogin < CURRTIME && (unsigned int)(CURRTIME - mu->lastlogin) >= nicksvs.expiry) ||
-			(mu->flags & MU_WAITAUTH && CURRTIME - mu->registered >= 86400))
+			(mu->flags & MU_WAITAUTH && CURRTIME - mu->registered >= 86400) ||
+			/* Expire unused anonymous accounts after 3 hours */
+			((mu->lastlogin - mu->registered < 5) && (CURRTIME - mu->registered >= 10800)))
 	{
 		/* Don't expire accounts with privs on them in atheme.conf,
 		 * otherwise someone can reregister
