@@ -26,6 +26,7 @@ command_t gs_invite = { "INVITE", N_("Invites a user to a group."), AC_AUTHENTIC
 
 static void gs_cmd_invite(sourceinfo_t *si, int parc, char *parv[])
 {
+	user_t *tu;
 	mygroup_t *mg;
 	myuser_t *mu;
 	groupacs_t *ga;
@@ -65,30 +66,39 @@ static void gs_cmd_invite(sourceinfo_t *si, int parc, char *parv[])
 		return;
 	}
 
-	if (metadata_find(mu, "private:groupinvite"))
-	{
-		command_fail(si, fault_badparams, _("\2%s\2 can not be invited to a group currently because they already \
-					have another invitation pending."), user);
-		return;
-	}
-
 	if (MU_NEVERGROUP & mu->flags)
 	{
 		command_fail(si, fault_noprivs, _("\2%s\2 does not wish to belong to any groups."), user);
 		return;
 	}
 
-	metadata_add(mu, "private:groupinvite", group);
-
-	if ((svs = service_find("memoserv")) != NULL)
+	int ret = add_gs_invite(mg, entity(mu), strshare_ref(entity(si->smu)->name), CURRTIME);
+	if(ret == 0)
 	{
-		snprintf(buf, BUFSIZE, "%s [auto memo] You have been invited to the group \2%s\2.", user, group);
-
-		command_exec_split(svs, si, "SEND", buf, svs->commands);
+			command_fail(si, fault_badparams, _("\2%s\2 is already invited to this group."), user);
+			return;
 	}
-	else
+	else if(ret < 0)
 	{
+			command_fail(si, fault_badparams, _("A error occured while inviting \2%s\2 to \2%s\2."), user, group);
+			return;
+	}
+
+	tu = user_find_named(user);
+	if (tu != NULL && tu->myuser == mu) {
 		myuser_notice(si->service->nick, mu, "You have been invited to the group \2%s\2.", group);
+	}
+	else {
+		if ((svs = service_find("memoserv")) != NULL)
+		{
+			snprintf(buf, BUFSIZE, "%s [auto memo] You have been invited to the group \2%s\2.", user, group);
+
+			command_exec_split(svs, si, "SEND", buf, svs->commands);
+		}
+		else
+		{
+			myuser_notice(si->service->nick, mu, "You have been invited to the group \2%s\2.", group);
+		}
 	}
 
 	logcommand(si, CMDLOG_SET, "INVITE: \2%s\2 \2%s\2", group, user);
@@ -106,4 +116,3 @@ void _moddeinit(module_unload_intent_t intent)
 {
 	service_named_unbind_command("groupserv", &gs_invite);
 }
-

@@ -26,6 +26,8 @@ static void write_groupdb(database_handle_t *db)
 
 	MYENTITY_FOREACH_T(mt, &state, ENT_GROUP)
 	{
+		mowgli_node_t *n;
+
 		continue_if_fail(mt != NULL);
 		mygroup_t *mg = group(mt);
 		continue_if_fail(mg != NULL);
@@ -38,6 +40,18 @@ static void write_groupdb(database_handle_t *db)
 		db_write_time(db, mg->regtime);
 		db_write_word(db, mgflags);
 		db_commit_row(db);
+
+		MOWGLI_ITER_FOREACH(n, mg->acs.head)
+		{
+			groupacs_t *ga = n->data;
+			char *flags = gflags_tostr(ga_flags, ga->flags);
+
+			db_start_row(db, "GACL");
+			db_start_row(db, entity(mg)->name);
+			db_start_row(db, ga->mt->name);
+			db_start_row(db, flags);
+			db_commit_row(db);
+		}
 
 		if (object(mg)->metadata)
 		{
@@ -52,25 +66,22 @@ static void write_groupdb(database_handle_t *db)
 		}
 	}
 
-	MYENTITY_FOREACH_T(mt, &state, ENT_GROUP)
+	mowgli_node_t *n;
+
+	MOWGLI_ITER_FOREACH(n, gs_invitelist.head)
 	{
-		mowgli_node_t *n;
+		gsinvite_t *l = n->data;
 
-		continue_if_fail(mt != NULL);
-		mygroup_t *mg = group(mt);
-		continue_if_fail(mg != NULL);
+		db_start_row(db, "GRPI");
 
-		MOWGLI_ITER_FOREACH(n, mg->acs.head)
-		{
-			groupacs_t *ga = n->data;
-			char *flags = gflags_tostr(ga_flags, ga->flags);
+		if (l->mg != NULL)
+			db_write_word(db, entity(l->mg)->name);
+		if (l->mt != NULL)
+			db_write_word(db, l->mt->name);
 
-			db_start_row(db, "GACL");
-			db_write_word(db, entity(mg)->name);
-			db_write_word(db, ga->mt->name);
-			db_write_word(db, flags);
-			db_commit_row(db);
-		}
+		db_write_word(db, l->inviter);
+		db_write_time(db, l->invitets);
+		db_commit_row(db);
 	}
 }
 
@@ -196,6 +207,104 @@ static void db_h_mdg(database_handle_t *db, const char *type)
 	metadata_add(obj, prop, value);
 }
 
+static void db_h_grpi(database_handle_t *db, const char *type)
+{
+	mygroup_t *mg;
+	myentity_t *mt;
+	const char *group = db_sread_word(db);
+	const char *entity = db_sread_word(db);
+	const char *inviter = db_sread_word(db);
+	time_t invitets = db_sread_time(db);
+
+	mg = mygroup_find(group);
+	mt = myentity_find(entity);
+	mt = myentity_find(entity);
+
+	if (mt == NULL)
+	{
+		slog(LG_INFO, "db-h-grpi: line %d: groupinvite for nonexistent entity %s", db->line, entity);
+		return;
+	}
+
+	if (mg == NULL)
+	{
+		slog(LG_INFO, "db-h-grpi: line %d: groupinvite for nonexistent group %s", db->line, group);
+		return;
+	}
+
+	add_gs_invite(mg, mt, strshare_get(inviter), invitets);
+}
+
+gsinvite_t *gs_invite_find(mygroup_t *mg, myentity_t *mt)
+{
+	mowgli_node_t *n;
+	gsinvite_t *l;
+
+	MOWGLI_ITER_FOREACH(n, gs_invitelist.head)
+	{
+		l = n->data;
+
+		if ((l->mg == mg || mg == NULL) && (l->mt == mt || mt == NULL))
+			return l;
+	}
+
+	return NULL;
+}
+
+void remove_gs_invite(mygroup_t *mg, myentity_t *mt)
+{
+	return_if_fail(mg != NULL);
+	return_if_fail(mt != NULL);
+
+	mowgli_node_t *n, *tn;
+	gsinvite_t *l;
+
+	MOWGLI_ITER_FOREACH_SAFE(n, tn, gs_invitelist.head)
+	{
+		l = n->data;
+
+		if ((l->mg != NULL && l->mg == mg) && (l->mt != NULL && l->mt == mt))
+		{
+			slog(LG_VERBOSE, "remove_gs_invite(): removing invite for %s (group %s)", l->mt->name, entity(l->mg)->name);
+
+			mowgli_node_delete(n, &gs_invitelist);
+
+			strshare_unref(l->inviter);
+			free(l);
+		}
+	}
+}
+
+int add_gs_invite(mygroup_t *mg, myentity_t *mt, const char *inviter, time_t invitets)
+{
+	return_val_if_fail(mg != NULL, -1);
+	return_val_if_fail(mt != NULL, -1);
+
+	gsinvite_t *l;
+
+	l = gs_invite_find(mg, mt);
+	if (l != NULL)
+	{
+		// Alrady invited
+		return 0;
+	}
+
+	l = smalloc(sizeof(gsinvite_t));
+
+	l->mg = mg;
+	l->mt = mt;
+	l->invitets = invitets;
+	l->inviter = inviter;
+	mowgli_node_add(l, &l->node, &gs_invitelist);
+
+	return 1;
+}
+
+mowgli_list_t gs_get_invitelist()
+{
+	return gs_invitelist;
+}
+
 void gs_db_init(void)
 {
 	hook_add_db_write_pre_ca(write_groupdb);
@@ -205,6 +314,7 @@ void gs_db_init(void)
 	db_register_type_handler("GACL", db_h_gacl);
 	db_register_type_handler("MDG", db_h_mdg);
 	db_register_type_handler("GFA", db_h_gfa);
+	db_register_type_handler("GRPI", db_h_grpi);
 }
 
 void gs_db_deinit(void)
@@ -216,4 +326,5 @@ void gs_db_deinit(void)
 	db_unregister_type_handler("GACL");
 	db_unregister_type_handler("MDG");
 	db_unregister_type_handler("GFA");
+	db_unregister_type_handler("GRPI");
 }

@@ -62,4 +62,13 @@ struct groupacs_ {
 	mowgli_node_t unode;
 };
 
+typedef struct gsinvite_ gsinvite_t;
+
+struct gsinvite_ {
+	mygroup_t *mg;
+	myentity_t *mt;
+	stringref inviter;
+  time_t invitets;
+	mowgli_node_t node;
+};
 #endif /* !GROUPSERV_H */

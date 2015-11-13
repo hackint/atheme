@@ -27,6 +27,7 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 	metadata_t *md, *md2;
 	unsigned int flags = 0;
 	bool invited = false;
+	gsinvite_t *l;
 
 	if (!parv[0])
 	{
@@ -41,11 +42,13 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 		return;
 	}
 
-	if ((md2 = metadata_find(si->smu, "private:groupinvite")))
+	l = gs_invite_find(mg, entity(si->smu));
+	if (l != NULL)
 	{
-		if (!strcasecmp(md2->value, parv[0]))
-			invited = true;
-		else
+		invited = true;
+	}
+	else
+	{
 			invited = false;
 	}
 
@@ -81,7 +84,7 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 	ga = groupacs_add(mg, entity(si->smu), flags);
 
 	if (invited)
-		metadata_delete(si->smu, "private:groupinvite");
+		remove_gs_invite(mg, entity(si->smu));
 
 	command_success_nodata(si, _("You are now a member of \2%s\2."), entity(mg)->name);
 }
@@ -97,4 +100,3 @@ void _moddeinit(module_unload_intent_t intent)
 {
 	service_named_unbind_command("groupserv", &gs_join);
 }
-
