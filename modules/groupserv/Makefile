@@ -22,6 +22,7 @@ BASE_SRCS =			\
 	leave.c			\
 	list.c			\
 	listchans.c		\
+	listinvites.c		\
 	register.c		\
 	regnolimit.c		\
 	set.c			\
@@ -44,4 +45,3 @@ include ../../buildsys.module.mk
 
 CPPFLAGS	+= -I../../include
 LIBS +=	-L../../libathemecore -lathemecore ${LDFLAGS_RPATH}
-
