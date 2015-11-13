@@ -43,6 +43,9 @@ E unsigned int myentity_count_group_flag(myentity_t *mt, unsigned int flagset);
 
 E const char *mygroup_founder_names(mygroup_t *mg);
 
+E myuser_t *mygroup_pick_candidate(mygroup_t *mg, unsigned int flag);
+E myuser_t *mygroup_pick_successor(mygroup_t *mg);
+
 /* services plumbing */
 E service_t *groupsvs;
 E mowgli_list_t gs_cmdtree;

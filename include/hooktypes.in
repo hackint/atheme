@@ -1,11 +1,11 @@
 # Atheme hooks system
-# 
+#
 # hook_add_event("NAME")
 # hook_call_NAME(argument)
 # hook_add_NAME(handler)
 # hook_add_first_NAME(handler)
 # hook_del_NAME(handler)
-# 
+#
 # Hooks that take a direct pointer to an object may not destroy that object.
 # If this is necessary it must be done in an event added from the hook.
 # Hooks with _can_ or _check_ in the name may fill in a field in the argument
@@ -60,6 +60,7 @@ channel_check_expire  hook_expiry_req_t *
 channel_acl_change hook_channel_acl_req_t *
 group_drop         mygroup_t *
 group_register     mygroup_t *
+group_user_delete  hook_group_user_delete_t *
 nick_can_register  hook_user_register_check_t *
 nick_group         hook_user_req_t *
 nick_check         user_t *

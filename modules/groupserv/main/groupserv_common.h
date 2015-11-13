@@ -34,6 +34,12 @@ struct mygroup_ {
 	bool visited;
 };
 
+typedef struct {
+	user_t *u;
+        mygroup_t *mg;
+        myuser_t *mu;
+} hook_group_user_delete_t;
+
 #define GA_FOUNDER		0x00000001
 #define GA_FLAGS		0x00000002
 #define GA_CHANACS		0x00000004

@@ -168,6 +168,7 @@ static void myuser_delete_hook(myuser_t *mu)
 {
 	mowgli_node_t *n, *tn;
 	mowgli_list_t *l;
+	hook_group_user_delete_t hdata;
 
 	l = myentity_get_membership_list(entity(mu));
 
@@ -175,10 +176,77 @@ static void myuser_delete_hook(myuser_t *mu)
 	{
 		groupacs_t *ga = n->data;
 
+		hdata.mu = mu;
+		hdata.mg = ga->mg;
+		hook_call_group_user_delete(&hdata);
+
 		groupacs_delete(ga->mg, ga->mt);
 	}
 
 	mowgli_list_free(l);
+}
+
+static void group_user_delete(hook_group_user_delete_t *hdata)
+{
+	myuser_t *successor;
+	myuser_t *mu;
+	mygroup_t *mg;
+	groupacs_t *ga;
+	unsigned int flags = 0;
+	mowgli_node_t *n;
+	groupinvite_t *gi;
+
+	mu = hdata->mu;
+	mg = hdata->mg;
+
+	/* not a founder */
+	if(!groupacs_find(mg, entity(mu), GA_FOUNDER, false))
+		return;
+
+	/* other founders remaining */
+	if (mygroup_count_flag(mg, GA_FOUNDER) > 1)
+		return;
+
+	if ((successor = mygroup_pick_successor(mg)) != NULL)
+	{
+
+		slog(LG_INFO, "group_user_delete: !!!4");
+		slog(LG_INFO, _("SUCCESSION: \2%s\2 to \2%s\2 from \2%s\2"), entity(mg)->name, entity(successor)->name, mygroup_founder_names(mg));
+		slog(LG_VERBOSE, "group_user_delete(): giving group %s to %s (founder %s)",
+				entity(mg)->name, entity(successor)->name,
+				mygroup_founder_names(mg));
+
+		MOWGLI_ITER_FOREACH(n, mg->invites.head)
+		{
+			gi = n->data;
+			if (gi->mg == mg && gi->inviter == entity(mu)->name) {
+				slog(LG_INFO, _("GRPI: Changing inviter from \2%s\2 to \2%s\2 (invite for \2%s\2 to group \2%s\2)"), mygroup_founder_names(mg),
+					entity(successor)->name, gi->mt->name, entity(mg)->name);
+					gi->inviter = strshare_ref(entity(successor)->name);
+			}
+		}
+
+		ga = groupacs_find(mg, entity(successor), 0, false);
+		if (ga != NULL) {
+			flags = ga->flags;
+			flags = gs_flags_parser("+F*", 1, flags);
+			ga->flags = flags;
+		}
+
+		if (groupsvs->me != NULL)
+			myuser_notice(groupsvs->nick, successor, "You are now founder of group \2%s\2 (as \2%s\2).", entity(mg)->name, entity(successor)->name);
+	}
+	/* no successor found */
+	else
+	{
+		slog(LG_REGISTER, _("DELETE: \2%s\2 from \2%s\2"), entity(mg)->name, mygroup_founder_names(mg));
+		slog(LG_VERBOSE, "group_user_delete(): deleting group %s (founder %s)",
+				entity(mg)->name, mygroup_founder_names(mg));
+
+		remove_group_chanacs(mg);
+		hook_call_group_drop(mg);
+		object_unref(mg);
+	}
 }
 
 static void osinfo_hook(sourceinfo_t *si)
@@ -202,12 +270,14 @@ void gs_hooks_init(void)
 	hook_add_event("grant_channel_access");
 	hook_add_event("operserv_info");
 	hook_add_event("sasl_may_impersonate");
+	hook_add_event("group_user_delete");
 
 	hook_add_user_info(user_info_hook);
 	hook_add_myuser_delete(myuser_delete_hook);
 	hook_add_grant_channel_access(grant_channel_access_hook);
 	hook_add_operserv_info(osinfo_hook);
 	hook_add_sasl_may_impersonate(sasl_may_impersonate_hook);
+	hook_add_group_user_delete(group_user_delete);
 }
 
 void gs_hooks_deinit(void)
@@ -219,4 +289,5 @@ void gs_hooks_deinit(void)
 	hook_del_grant_channel_access(grant_channel_access_hook);
 	hook_del_operserv_info(osinfo_hook);
 	hook_del_sasl_may_impersonate(sasl_may_impersonate_hook);
+	hook_del_group_user_delete(group_user_delete);
 }

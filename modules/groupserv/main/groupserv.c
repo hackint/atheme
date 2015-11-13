@@ -109,6 +109,76 @@ mygroup_t *mygroup_find(const char *name)
 	return group(mg);
 }
 
+#define RECENTLY_SEEN (7 * 86400)
+
+/* Find a user fulfilling the conditions who can take another group */
+myuser_t *mygroup_pick_candidate(mygroup_t *mg, unsigned int flag)
+{
+	mowgli_node_t *n;
+	groupacs_t *ga;
+	myentity_t *mt;
+	bool recent_ok = false;
+
+	return_val_if_fail(mg != NULL, NULL);
+
+	MOWGLI_ITER_FOREACH(n, mg->acs.head)
+	{
+		ga = n->data;
+		mt = ga->mt;
+		if (ga->flags & GA_BAN)
+			continue;
+
+		/* We already check if there is more than one founder, so if we reach this
+		   the only user with GA_FOUNDER is the *old* founder.
+		 */
+		if (ga->flags & GA_FOUNDER)
+			continue;
+
+		if (mt != NULL && groupacs_find(mg, mt, flag, TRUE) != NULL) {
+			/* now have a user with requested flags */
+			if (isuser(mt))
+				recent_ok = MOWGLI_LIST_LENGTH(&user(mt)->logins) > 0 ||
+					CURRTIME - user(mt)->lastlogin < RECENTLY_SEEN;
+
+			/* TODO: Check for higher ranked users like mychan_pick_candidate does */
+			if (recent_ok)
+				return user(mt);
+		}
+	}
+	return user(NULL);
+}
+
+myuser_t *mygroup_pick_successor(mygroup_t *mg)
+{
+	myuser_t *mu;
+
+	return_val_if_fail(mg != NULL, NULL);
+
+	mu = mygroup_pick_candidate(mg, GA_FLAGS);
+	if (mu != NULL)
+		return mu;
+	mu = mygroup_pick_candidate(mg, GA_SET);
+	if (mu != NULL)
+		return mu;
+	mu = mygroup_pick_candidate(mg, GA_CHANACS);
+	if (mu != NULL)
+		return mu;
+	mu = mygroup_pick_candidate(mg, GA_MEMOS);
+	if (mu != NULL)
+		return mu;
+	mu = mygroup_pick_candidate(mg, GA_VHOST);
+	if (mu != NULL)
+		return mu;
+	mu = mygroup_pick_candidate(mg, GA_INVITE);
+	if (mu != NULL)
+		return mu;
+	mu = mygroup_pick_candidate(mg, GA_ACLVIEW);
+	if (mu != NULL)
+		return mu;
+	/* just a user with access */
+	return mygroup_pick_candidate(mg, 0);
+}
+
 static void groupacs_des(groupacs_t *ga)
 {
 	metadata_delete_all(ga);
