@@ -27,7 +27,7 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 	metadata_t *md, *md2;
 	unsigned int flags = 0;
 	bool invited = false;
-	gsinvite_t *l;
+	groupinvite_t *gi;
 
 	if (!parv[0])
 	{
@@ -42,8 +42,7 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 		return;
 	}
 
-	l = gs_invite_find(mg, entity(si->smu));
-	if (l != NULL)
+	if ((gi = groupinvite_find(mg, entity(si->smu))) != NULL)
 	{
 		invited = true;
 	}
@@ -84,7 +83,7 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 	ga = groupacs_add(mg, entity(si->smu), flags);
 
 	if (invited)
-		remove_gs_invite(mg, entity(si->smu));
+		groupinvite_delete(mg, entity(si->smu));
 
 	command_success_nodata(si, _("You are now a member of \2%s\2."), entity(mg)->name);
 }

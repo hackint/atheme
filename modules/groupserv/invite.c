@@ -30,6 +30,7 @@ static void gs_cmd_invite(sourceinfo_t *si, int parc, char *parv[])
 	mygroup_t *mg;
 	myuser_t *mu;
 	groupacs_t *ga;
+	groupinvite_t *gi;
 	char *group = parv[0];
 	char *user = parv[1];
 	char buf[BUFSIZE];
@@ -72,17 +73,13 @@ static void gs_cmd_invite(sourceinfo_t *si, int parc, char *parv[])
 		return;
 	}
 
-	int ret = add_gs_invite(mg, entity(mu), strshare_ref(entity(si->smu)->name), CURRTIME);
-	if(ret == 0)
+	if ((gi = groupinvite_find(mg, entity(mu))) != NULL)
 	{
-			command_fail(si, fault_badparams, _("\2%s\2 is already invited to this group."), user);
-			return;
+		command_fail(si, fault_badparams, _("\2%s\2 is already invited to this group."), user);
+		return;
 	}
-	else if(ret < 0)
-	{
-			command_fail(si, fault_badparams, _("A error occured while inviting \2%s\2 to \2%s\2."), user, group);
-			return;
-	}
+
+	gi = groupinvite_add(mg, entity(mu), strshare_ref(entity(si->smu)->name), CURRTIME);
 
 	tu = user_find_named(user);
 	if (tu != NULL && tu->myuser == mu) {

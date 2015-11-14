@@ -33,10 +33,9 @@ gflags_t *ga_flags;
 
 groupserv_config_t *gs_config;
 
-gsinvite_t * (*gs_invite_find)(mygroup_t *mg, myentity_t *mt);
-void (*remove_gs_invite)(mygroup_t *mg, myentity_t *mt);
-int (*add_gs_invite)(mygroup_t *mg, myentity_t *mt, const char *inviter, time_t invitets);
-mowgli_list_t (*gs_get_invitelist)(void);
+groupinvite_t * (*groupinvite_add)(mygroup_t *mg, myentity_t *mt, const char *inviter, time_t invite_ts);
+groupinvite_t * (*groupinvite_find)(mygroup_t *mg, myentity_t *mt);
+void (*groupinvite_delete)(mygroup_t *mg, myentity_t *mt);
 
 static inline void use_groupserv_main_symbols(module_t *m)
 {
@@ -60,10 +59,9 @@ static inline void use_groupserv_main_symbols(module_t *m)
     MODULE_TRY_REQUEST_SYMBOL(m, ga_flags, "groupserv/main", "ga_flags");
     MODULE_TRY_REQUEST_SYMBOL(m, gs_config, "groupserv/main", "gs_config");
 
-    MODULE_TRY_REQUEST_SYMBOL(m, gs_invite_find, "groupserv/main", "gs_invite_find");
-    MODULE_TRY_REQUEST_SYMBOL(m, remove_gs_invite, "groupserv/main", "remove_gs_invite");
-    MODULE_TRY_REQUEST_SYMBOL(m, add_gs_invite, "groupserv/main", "add_gs_invite");
-    MODULE_TRY_REQUEST_SYMBOL(m, gs_get_invitelist, "groupserv/main", "gs_get_invitelist");
+    MODULE_TRY_REQUEST_SYMBOL(m, groupinvite_add, "groupserv/main", "groupinvite_add");
+    MODULE_TRY_REQUEST_SYMBOL(m, groupinvite_find, "groupserv/main", "groupinvite_find");
+    MODULE_TRY_REQUEST_SYMBOL(m, groupinvite_delete, "groupserv/main", "groupinvite_delete");
 }
 
 #ifndef IN_GROUPSERV_SET

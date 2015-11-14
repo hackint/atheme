@@ -53,6 +53,18 @@ static void write_groupdb(database_handle_t *db)
 			db_commit_row(db);
 		}
 
+		MOWGLI_ITER_FOREACH(n, mg->invites.head)
+		{
+			groupinvite_t *gi = n->data;
+
+			db_start_row(db, "GRPI");
+			db_start_row(db, entity(mg)->name);
+			db_start_row(db, gi->mt->name);
+			db_write_word(db, gi->inviter);
+			db_write_time(db, gi->invite_ts);
+			db_commit_row(db);
+		}
+
 		if (object(mg)->metadata)
 		{
 			MOWGLI_PATRICIA_FOREACH(md, &state2, object(mg)->metadata)
@@ -64,24 +76,6 @@ static void write_groupdb(database_handle_t *db)
 				db_commit_row(db);
 			}
 		}
-	}
-
-	mowgli_node_t *n;
-
-	MOWGLI_ITER_FOREACH(n, gs_invitelist.head)
-	{
-		gsinvite_t *l = n->data;
-
-		db_start_row(db, "GRPI");
-
-		if (l->mg != NULL)
-			db_write_word(db, entity(l->mg)->name);
-		if (l->mt != NULL)
-			db_write_word(db, l->mt->name);
-
-		db_write_word(db, l->inviter);
-		db_write_time(db, l->invitets);
-		db_commit_row(db);
 	}
 }
 
@@ -211,14 +205,20 @@ static void db_h_grpi(database_handle_t *db, const char *type)
 {
 	mygroup_t *mg;
 	myentity_t *mt;
-	const char *group = db_sread_word(db);
+
+	const char *name = db_sread_word(db);
 	const char *entity = db_sread_word(db);
 	const char *inviter = db_sread_word(db);
 	time_t invitets = db_sread_time(db);
 
-	mg = mygroup_find(group);
+	mg = mygroup_find(name);
 	mt = myentity_find(entity);
-	mt = myentity_find(entity);
+
+	if (mg == NULL)
+	{
+		slog(LG_INFO, "db-h-grpi: line %d: groupinvite for nonexistent group %s", db->line, name);
+		return;
+	}
 
 	if (mt == NULL)
 	{
@@ -226,83 +226,7 @@ static void db_h_grpi(database_handle_t *db, const char *type)
 		return;
 	}
 
-	if (mg == NULL)
-	{
-		slog(LG_INFO, "db-h-grpi: line %d: groupinvite for nonexistent group %s", db->line, group);
-		return;
-	}
-
-	add_gs_invite(mg, mt, strshare_get(inviter), invitets);
-}
-
-gsinvite_t *gs_invite_find(mygroup_t *mg, myentity_t *mt)
-{
-	mowgli_node_t *n;
-	gsinvite_t *l;
-
-	MOWGLI_ITER_FOREACH(n, gs_invitelist.head)
-	{
-		l = n->data;
-
-		if ((l->mg == mg || mg == NULL) && (l->mt == mt || mt == NULL))
-			return l;
-	}
-
-	return NULL;
-}
-
-void remove_gs_invite(mygroup_t *mg, myentity_t *mt)
-{
-	return_if_fail(mg != NULL);
-	return_if_fail(mt != NULL);
-
-	mowgli_node_t *n, *tn;
-	gsinvite_t *l;
-
-	MOWGLI_ITER_FOREACH_SAFE(n, tn, gs_invitelist.head)
-	{
-		l = n->data;
-
-		if ((l->mg != NULL && l->mg == mg) && (l->mt != NULL && l->mt == mt))
-		{
-			slog(LG_VERBOSE, "remove_gs_invite(): removing invite for %s (group %s)", l->mt->name, entity(l->mg)->name);
-
-			mowgli_node_delete(n, &gs_invitelist);
-
-			strshare_unref(l->inviter);
-			free(l);
-		}
-	}
-}
-
-int add_gs_invite(mygroup_t *mg, myentity_t *mt, const char *inviter, time_t invitets)
-{
-	return_val_if_fail(mg != NULL, -1);
-	return_val_if_fail(mt != NULL, -1);
-
-	gsinvite_t *l;
-
-	l = gs_invite_find(mg, mt);
-	if (l != NULL)
-	{
-		// Alrady invited
-		return 0;
-	}
-
-	l = smalloc(sizeof(gsinvite_t));
-
-	l->mg = mg;
-	l->mt = mt;
-	l->invitets = invitets;
-	l->inviter = inviter;
-	mowgli_node_add(l, &l->node, &gs_invitelist);
-
-	return 1;
-}
-
-mowgli_list_t gs_get_invitelist()
-{
-	return gs_invitelist;
+	groupinvite_add(mg, mt, strshare_get(inviter), invitets);
 }
 
 void gs_db_init(void)

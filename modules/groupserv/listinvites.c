@@ -23,28 +23,32 @@ command_t gs_listinvites = { "LISTINVITES", N_("List groups with pending invitat
 /* Perhaps add criteria to groupser/list like there is now in chanserv/list and nickserv/list in the future */
 static void gs_cmd_listinvites(sourceinfo_t *si, int parc, char *parv[])
 {
-	gsinvite_t *l;
+	myentity_t *mt;
 	mowgli_node_t *n;
+	myentity_iteration_state_t state;
 	char buf[BUFSIZE];
 	struct tm tm;
-	mowgli_list_t gs_invitelist;
 
-	/* No need to say "Groups currently registered". You can't have a unregistered group. */
 	command_success_nodata(si, _("Groups you are invited to:"));
 
-	gs_invitelist = gs_get_invitelist();
-	MOWGLI_ITER_FOREACH(n, gs_invitelist.head)
+	MYENTITY_FOREACH_T(mt, &state, ENT_GROUP)
 	{
-		l = n->data;
-		if (l->mt != entity(si->smu) || entity(si->smu) == NULL)
-			continue;
+		mg = group(mt);
+		continue_if_fail(mt != NULL);
+		continue_if_fail(mg != NULL);
 
-		tm = *localtime(&l->invitets);
+		MOWGLI_ITER_FOREACH(n, mg->invites.head)
+		{
+			gi = n->data;
 
-		strftime(buf, BUFSIZE, TIME_FORMAT, &tm);
+			if (gi->mg == mg && gi->mt == entity(si->smu)) {
+				tm = *localtime(&gi->invite_ts);
+				strftime(buf, BUFSIZE, TIME_FORMAT, &tm);
 
-		command_success_nodata(si, "group:\2%s\2 inviter:\2%s\2 (%s)",
-					entity(l->mg)->name, l->inviter, buf);
+				command_success_nodata(si, "group:\2%s\2 inviter:\2%s\2 (%s)",
+						entity(gi->mg)->name, gi->inviter, buf);
+			}
+		}
 	}
 	command_success_nodata(si, "End of list.");
 	logcommand(si, CMDLOG_GET, "LISTINVITES");
