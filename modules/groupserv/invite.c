@@ -31,6 +31,7 @@ static void gs_cmd_invite(sourceinfo_t *si, int parc, char *parv[])
 	myuser_t *mu;
 	groupacs_t *ga;
 	groupinvite_t *gi;
+	metadata_t *md;
 	char *group = parv[0];
 	char *user = parv[1];
 	char buf[BUFSIZE];
@@ -71,6 +72,16 @@ static void gs_cmd_invite(sourceinfo_t *si, int parc, char *parv[])
 	{
 		command_fail(si, fault_noprivs, _("\2%s\2 does not wish to belong to any groups."), user);
 		return;
+	}
+
+	/* Legacy code -  Search old invite, delete it and create a new one */
+	if ((md = metadata_find(mu, "private:groupinvite")))
+	{
+		if (!strcasecmp(md->value, group)) {
+			slog(LG_INFO, "groupserv: invite convert.");
+			metadata_delete(mu, "private:groupinvite");
+			groupinvite_add(mg, entity(mu), strshare_ref(entity(si->smu)->name), CURRTIME);
+		}
 	}
 
 	if ((gi = groupinvite_find(mg, entity(mu))) != NULL)

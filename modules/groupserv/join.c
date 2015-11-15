@@ -48,7 +48,14 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 	}
 	else
 	{
-			invited = false;
+		/* Legacy code -  Search old invite and delete it */
+		if ((md2 = metadata_find(si->smu, "private:groupinvite")))
+		{
+			if (!strcasecmp(md2->value, parv[0])) {
+				invited = true;
+				metadata_delete(si->smu, "private:groupinvite");
+			}
+		}
 	}
 
 	if (!(mg->flags & MG_OPEN) && !invited)
