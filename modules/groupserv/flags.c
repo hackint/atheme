@@ -109,6 +109,12 @@ static void gs_cmd_flags(sourceinfo_t *si, int parc, char *parv[])
 		return;
 	}
 
+	if (groupacs_find(mg, mt, 0, true) == NULL)
+	{
+		command_fail(si, fault_noprivs, _("\2%s\2 is not a member of group %s."), parv[1], entity(mg)->name);
+		return;
+	}
+
 	ga = groupacs_find(mg, mt, 0, false);
 	if (ga != NULL)
 		flags = ga->flags;
