@@ -58,21 +58,21 @@ static void gs_cmd_join(sourceinfo_t *si, int parc, char *parv[])
 		}
 	}
 
-	if (!(mg->flags & MG_OPEN) && !invited)
+	if (groupacs_sourceinfo_has_flag(mg, si, 0))
 	{
-		command_fail(si, fault_noprivs, _("Group \2%s\2 is not open to anyone joining."), parv[0]);
+		command_fail(si, fault_nochange, _("You are already a member of group \2%s\2."), parv[0]);
 		return;
 	}
 
-	if (groupacs_sourceinfo_has_flag(mg, si, GA_BAN))
+	if (!(mg->flags & MG_OPEN) && !invited)
 	{
 		command_fail(si, fault_noprivs, _("You are not authorized to execute this command."));
 		return;
 	}
 
-	if (groupacs_sourceinfo_has_flag(mg, si, 0))
+	if (groupacs_sourceinfo_has_flag(mg, si, GA_BAN))
 	{
-		command_fail(si, fault_nochange, _("You are already a member of group \2%s\2."), parv[0]);
+		command_fail(si, fault_noprivs, _("Group \2%s\2 is not open to anyone joining."), parv[0]);
 		return;
 	}
 
