@@ -164,7 +164,8 @@ static void gs_cmd_flags(sourceinfo_t *si, int parc, char *parv[])
 	}
 
 no_founder:
-	if (ga != NULL && flags != 0)
+	/* Only remove a user if it is explicitly requested with "-*" or the user had flags before */
+	if (ga != NULL && (flags != 0 || (flags == ga->flags && strcasecmp("-*", parv[2]))))
 	{
 		if (ga->flags != flags)
 			ga->flags = flags;
@@ -224,4 +225,3 @@ void _moddeinit(module_unload_intent_t intent)
 {
 	service_named_unbind_command("groupserv", &gs_flags);
 }
-

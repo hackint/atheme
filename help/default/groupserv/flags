@@ -11,7 +11,8 @@ Syntax: FLAGS <!group>
 
 You can modify a users' flags if you yourself have the +f flag.
 This has much the same syntax as chanserv/flags, using + to add
-flags to a user and - to remove flags from a user.
+flags to a user and - to remove flags from a user. To remove a
+user without flags from the group you have to force it with -*
 
 Syntax: FLAGS <!group> [nickname flag_changes]
 
