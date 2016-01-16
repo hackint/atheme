@@ -169,6 +169,10 @@ static void myuser_delete_hook(myuser_t *mu)
 	mowgli_node_t *n, *tn;
 	mowgli_list_t *l;
 	hook_group_user_delete_t hdata;
+	myentity_iteration_state_t state;
+	myentity_t *mt;
+	mygroup_t *mg;
+	groupinvite_t *gi;
 
 	l = myentity_get_membership_list(entity(mu));
 
@@ -184,6 +188,23 @@ static void myuser_delete_hook(myuser_t *mu)
 	}
 
 	mowgli_list_free(l);
+
+	MYENTITY_FOREACH_T(mt, &state, ENT_GROUP)
+	{
+		mg = group(mt);
+		continue_if_fail(mt != NULL);
+		continue_if_fail(mg != NULL);
+
+		MOWGLI_ITER_FOREACH(n, mg->invites.head)
+		{
+			gi = n->data;
+
+			if (gi->mg == mg && gi->mt == entity(mu) || gi->mg == mg && gi->inviter == entity(mu)->name) {
+				slog(LG_REGISTER, _("GRPI: Deleting invite for \2%s\2 from \2%s\2 for group \2%s\2"), gi->mt->name, gi->inviter, entity(gi->mg)->name);
+				groupinvite_delete(mg, gi->mt);
+			}
+		}
+	}
 }
 
 static void group_user_delete(hook_group_user_delete_t *hdata)
